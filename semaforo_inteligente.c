@@ -42,8 +42,10 @@ void setled(const uint index, const uint8_t r, const uint8_t g, const uint8_t b)
 void matriz(uint8_t r, uint8_t g, uint8_t b);
 void display(); //esta é a função responsável por permitir ditar qual led vai acender.
 void i2cinit();
+void oledinit();
 void vLed_basico();
 void vMatriz();
+void vDisplay();
 //Facilitador de reset ---------------------------
 #include "pico/bootrom.h"
 #define botaoB 6
@@ -60,6 +62,7 @@ int main(){
 //Facilitador de reset -----------------------------    
     stdio_init_all();
     xTaskCreate(vLed_basico, "Led básico", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vMatriz, "Matriz", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     vTaskStartScheduler();
     panic_unsupported();
  
@@ -75,19 +78,28 @@ void vLed_basico(){
             gpio_put(green_led, 0);
             vTaskDelay(pdMS_TO_TICKS(5000));
             gpio_put(red_led, 0);
-            }
+        }
 }
 
 void vMatriz(){
     matriz_init(matriz_led);
-        while(true)
-        matriz(0, 100, 0);
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        matriz(1, 100 ,0);
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        matriz(1, 0, 0);
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        while(true){
+            matriz(0, 100, 0);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            matriz(1, 100 ,0);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            matriz(1, 0, 0);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        }
 
+}
+
+void vDisplay(){
+    oledinit();
+
+        while(true){
+            
+        }
 }
 
 void ledinit(){ //inicialização dos leds básicos.
