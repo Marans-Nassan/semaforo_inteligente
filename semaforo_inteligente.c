@@ -11,7 +11,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-
+#define botao_a 5
 #define matriz_led 7
 #define green_led 11
 #define red_led 13
@@ -33,19 +33,29 @@ pixeis leds [matriz_led_pins];
 PIO pio;
 uint sm;
 
-const volatile bool modo_noturno = false;
+TaskHandle_t vLed_basico_handler = NULL;
+TaskHandle_t vMatriz_handler = NULL;
+TaskHandle_t vMatriz_noturno_handler = NULL;
+TaskHandle_t vLed_basico_noturno_handler = NULL;
+
+volatile bool modo_noturno = false;
 
 // Protótipos
 void ledinit();
+void botinit();
 void matriz_init(uint pin); //inicialização da matriz de led.
 void setled(const uint index, const uint8_t r, const uint8_t g, const uint8_t b); //configuração para permitir o uso da função display.
 void matriz(uint8_t r, uint8_t g, uint8_t b);
 void display(); //esta é a função responsável por permitir ditar qual led vai acender.
 void i2cinit();
 void oledinit();
+void vAlternar_modo();
+void vModo();
 void vLed_basico();
 void vMatriz();
 void vDisplay();
+void vLed_basico_noturno();
+void vMatriz_noturno();
 //Facilitador de reset ---------------------------
 #include "pico/bootrom.h"
 #define botaoB 6
@@ -61,35 +71,75 @@ int main(){
     gpio_set_irq_enabled_with_callback(botaoB, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 //Facilitador de reset -----------------------------    
     stdio_init_all();
-    xTaskCreate(vLed_basico, "Led básico", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
-    xTaskCreate(vMatriz, "Matriz", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+    ledinit();
+    matriz_init(matriz_led);
+    xTaskCreate(vAlternar_modo, "Pressionamento do botão", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vModo, "Alternância de modo", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     vTaskStartScheduler();
     panic_unsupported();
+
  
 }
 
+void vAlternar_modo(){
+    botinit();
+    static bool botao_a_estado = true;
+    static uint64_t last_time = 0;
+
+        while(true){
+            uint64_t current_time = to_us_since_boot(get_absolute_time()) /1000000;
+            bool botao_pressionado = gpio_get(botao_a);
+
+            if(!botao_pressionado && !botao_a_estado && (current_time - last_time > 1)) {
+                modo_noturno = !modo_noturno;
+                xTaskCreate(vModo, "Alternância de modo", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+                last_time = current_time;
+            }
+        botao_a_estado = botao_pressionado;
+        vTaskDelay(pdMS_TO_TICKS(10));
+        }
+}
+
+void vModo(){
+    vTaskDelay(pdMS_TO_TICKS(10));
+    if(!modo_noturno){
+        xTaskCreate(vLed_basico, "Led básico", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, &vLed_basico_handler);
+        xTaskCreate(vMatriz, "Matriz", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, &vMatriz_handler);
+        vTaskDelete(vLed_basico_noturno_handler);
+        vTaskDelete(vMatriz_noturno_handler);
+
+
+    }
+    else{
+        xTaskCreate(vMatriz_noturno, "Matriz modo noturno", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, &vMatriz_noturno_handler);
+        xTaskCreate(vLed_basico_noturno, "Led modo noturno", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, &vLed_basico_noturno_handler);
+        vTaskDelete(vLed_basico_handler);
+        vTaskDelete(vMatriz_handler);
+
+    }
+    vTaskDelete(NULL);
+}
+
 void vLed_basico(){
-    ledinit();
         while(true){
             gpio_put(green_led, 1);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
             gpio_put(red_led, 1);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
             gpio_put(green_led, 0);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
             gpio_put(red_led, 0);
         }
 }
 
 void vMatriz(){
-    matriz_init(matriz_led);
         while(true){
             matriz(0, 100, 0);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
             matriz(1, 100 ,0);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
             matriz(1, 0, 0);
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000));
         }
 
 }
@@ -102,6 +152,27 @@ void vDisplay(){
         }
 }
 
+void vLed_basico_noturno(){
+    while(true){
+        gpio_put(green_led, 1);
+        gpio_put(red_led, 1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        gpio_put(green_led, 0);
+        gpio_put(red_led, 0);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void vMatriz_noturno(){
+        while(true){
+            matriz(1, 100, 0);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            matriz(0, 0 ,0);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+}
+
 void ledinit(){ //inicialização dos leds básicos.
     uint8_t leds[2] = {11, 13};
     for(uint8_t i = 0 ; i < 2; i++){
@@ -109,6 +180,12 @@ void ledinit(){ //inicialização dos leds básicos.
         gpio_set_dir(leds[i], GPIO_OUT);
         gpio_put(leds[i], 0);
     }
+}
+
+void botinit(){
+    gpio_init(botao_a);
+    gpio_set_dir(botao_a, GPIO_IN);
+    gpio_pull_up(botao_a);
 }
 
 void matriz_init(uint pin){
