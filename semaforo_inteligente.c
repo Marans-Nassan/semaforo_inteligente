@@ -11,28 +11,31 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define botao_a 5
-#define matriz_led 7
-#define green_led 11
-#define red_led 13
-#define I2C_PORT i2c1
-#define I2C_SDA 14
-#define I2C_SCL 15
-#define endereco 0x3C
-#define buzzer_a 21
-#define matriz_led_pins 25
+// Definição de pinos e constantes
+#define botao_a 5                 // Botão A
+#define matriz_led 7              // Pino da matriz de LED (WS2812)
+#define green_led 11              // LED verde
+#define red_led 13                // LED vermelho
+#define I2C_PORT i2c1             // Porta I2C
+#define I2C_SDA 14                // Pino SDA I2C
+#define I2C_SCL 15                // Pino SCL I2C
+#define endereco 0x3C             // Endereço do display OLED
+#define buzzer_a 21               // Pino do buzzer
+#define matriz_led_pins 25        // Quantidade de LEDs da matriz
 
-ssd1306_t ssd;
+ssd1306_t ssd;                    // Objeto do display OLED
 
+// Estrutura para armazenar cores dos LEDs
 typedef struct pixeis {
-    uint8_t cor1, cor2, cor3;
-}pixeis;
+    uint8_t cor1, cor2, cor3;     // cores no formato GRB
+} pixeis;
 
-pixeis leds [matriz_led_pins];
+pixeis leds [matriz_led_pins];    // Array de LEDs da matriz
 
-PIO pio;
-uint sm;
+PIO pio;                          // PIO usado para controlar WS2812
+uint sm;                          // State machine do PIO
 
+// Handles das tasks (FreeRTOS)
 TaskHandle_t vLed_basico_handler = NULL;
 TaskHandle_t vMatriz_handler = NULL;
 TaskHandle_t vSom_handler = NULL;
@@ -42,46 +45,31 @@ TaskHandle_t vLed_basico_noturno_handler = NULL;
 TaskHandle_t vSom_noturno_handler = NULL;
 TaskHandle_t vDisplay_noturno_handler = NULL;
 
+volatile bool modo_noturno = false;  // Flag para modo noturno
 
-
-volatile bool modo_noturno = false;
-
-// Protótipos
-void ledinit();
-void botinit();
-void matriz_init(uint pin); //inicialização da matriz de led.
-void setled(const uint index, const uint8_t r, const uint8_t g, const uint8_t b); //configuração para permitir o uso da função display.
-void matriz(uint8_t r, uint8_t g, uint8_t b);
-void display(); //esta é a função responsável por permitir ditar qual led vai acender.
-void i2cinit();
-void oledinit();
-void oledisplay(uint8_t segundos);
-void pwm_setup();
-void pwm_level(uint32_t duty_cycle);
-void vAlternar_modo();
-void vModo();
-void vLed_basico();
-void vMatriz();
-void vSom();
-void vDisplay();
-void vLed_basico_noturno();
-void vMatriz_noturno();
-void vSom_noturno();
-void vDisplay_noturno();
-//Facilitador de reset ---------------------------
-#include "pico/bootrom.h"
-#define botaoB 6
-void gpio_irq_handler(uint gpio, uint32_t events)
-{
-    reset_usb_boot(0, 0);
-}
+void ledinit(); // Inicializa os LEDs básicos (green e red)
+void botinit(); // Inicializa o botão A
+void matriz_init(uint pin); // Inicializa a matriz de LED WS2812
+void setled(const uint index, const uint8_t r, const uint8_t g, const uint8_t b); // Define a cor de um LED específico no array
+void matriz(uint8_t r, uint8_t g, uint8_t b); // Acende todos os LEDs da matriz com a mesma cor
+void display(); // Envia os valores de cor armazenados no array para os LEDs fisicamente
+void i2cinit(); // Inicializa o barramento I2C
+void oledinit(); // Inicializa o display OLED
+void oledisplay(uint8_t segundos); // Mostra os segundos restante do semáforo no display OLED
+void pwm_setup(); // Configura o PWM no pino do buzzer
+void pwm_level(uint32_t duty_cycle); // Define o nível de duty cycle do PWM do buzzer
+void vAlternar_modo(); // Task que alterna o modo (normal/noturno) ao pressionar o botão (Polling)
+void vModo(); // Task que gerencia o modo atual (ativa/desativa tasks conforme o modo)
+void vLed_basico(); // Task que gerencia os LEDs básicos no modo normal
+void vMatriz(); // Task que gerencia a matriz no modo normal
+void vSom(); // Task que gerencia o som no modo normal
+void vDisplay(); // Task que gerencia o display OLED no modo normal
+void vLed_basico_noturno(); // Task que gerencia os LEDs básicos no modo noturno
+void vMatriz_noturno(); // Task que gerencia a matriz no modo noturno
+void vSom_noturno(); // Task que gerencia o som no modo noturno
+void vDisplay_noturno(); // Task que gerencia o display OLED no modo noturno
 
 int main(){
-    gpio_init(botaoB);
-    gpio_set_dir(botaoB, GPIO_IN);
-    gpio_pull_up(botaoB);
-    gpio_set_irq_enabled_with_callback(botaoB, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-//Facilitador de reset -----------------------------    
     stdio_init_all();
     ledinit();
     matriz_init(matriz_led);
@@ -93,7 +81,6 @@ int main(){
     vTaskStartScheduler();
     panic_unsupported();
 
- 
 }
 
 void vAlternar_modo(){
@@ -166,7 +153,6 @@ void vMatriz(){
             matriz(1, 0, 0);
             vTaskDelay(pdMS_TO_TICKS(6000));
         }
-
 }
 
 void vSom(){
@@ -194,19 +180,23 @@ void vSom(){
     }
 }
 
-
 void vDisplay(){
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
     while(true){
-        for(uint8_t i = 5 ; i >= 0; i--){
+        for(uint8_t i = 5 ; i > 0; i--){
             oledisplay(i);
+            vTaskDelay(pdMS_TO_TICKS(975));
         }
-        for(uint8_t i = 3 ; i >= 0; i--){
+        for(uint8_t i = 3 ; i > 0; i--){
             oledisplay(i);
+            vTaskDelay(pdMS_TO_TICKS(975));
+
         }
-        for(uint8_t i = 6 ; i >= 0; i--){
+        for(uint8_t i = 6 ; i > 0; i--){
             oledisplay(i);
+            vTaskDelay(pdMS_TO_TICKS(975));
+
         }
     }
 }
@@ -231,7 +221,6 @@ void vMatriz_noturno(){
             matriz(0, 0 ,0);
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
-
 }
 
 void vSom_noturno(){
@@ -322,18 +311,12 @@ void oledinit(){
     ssd1306_send_data(&ssd);
 }
 
-void oledisplay(uint8_t segundos){
-    char tempo[3];
-    tempo[0] = '0' + (segundos / 10);
-    tempo[1] = '0' + (segundos % 10);
-    tempo[2] = '\0';
-    for(uint8_t i = 0; i <= 2 ; i++){
-        ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, true, false);
-        ssd1306_draw_string(&ssd, tempo, 58, 25 );
-        ssd1306_send_data(&ssd);
-        vTaskDelay(pdMS_TO_TICKS(250));
-    }
-    
+void oledisplay(uint8_t segundos) {
+    char tempo[4];  
+    snprintf(tempo, sizeof(tempo), "%02u", segundos);
+    ssd1306_rect(&ssd, 1, 1, WIDTH - 2, HEIGHT - 2, true, false);
+    ssd1306_draw_string(&ssd, tempo, 58, 25);
+    ssd1306_send_data(&ssd);
 }
 
 void pwm_setup(){
