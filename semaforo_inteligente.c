@@ -157,12 +157,11 @@ void vMatriz(){
 
 void vSom(){
     while(true){
-        for(uint8_t i = 0; i < 50; i++ ){
-            pwm_level(25);
-            vTaskDelay(pdMS_TO_TICKS(50));
-            pwm_level(0);
-            vTaskDelay(pdMS_TO_TICKS(50));
-        }
+        pwm_level(75);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        pwm_level(0);
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        
         
         for(uint8_t i = 0; i < 15; i++ ){
             pwm_level(25);
@@ -171,11 +170,11 @@ void vSom(){
             vTaskDelay(pdMS_TO_TICKS(100));
         }
 
-        for(uint8_t i = 0; i < 12; i++ ){
+        for(uint8_t i = 0; i < 3; i++ ){
             pwm_level(25);
-            vTaskDelay(pdMS_TO_TICKS(250));
+            vTaskDelay(pdMS_TO_TICKS(500));
             pwm_level(0);
-            vTaskDelay(pdMS_TO_TICKS(250));
+            vTaskDelay(pdMS_TO_TICKS(1500));
         }
     }
 }
@@ -226,9 +225,9 @@ void vMatriz_noturno(){
 void vSom_noturno(){
     while(true){
         pwm_level(25);
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(300));
         pwm_level(0);
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
